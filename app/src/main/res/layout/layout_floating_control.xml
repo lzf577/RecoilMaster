@@ -167,8 +167,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:max="30"
-                android:min="1"
-                android:progress="5" />
+                android:min="0"
+                android:progress="0" />
         </LinearLayout>
 
         <!-- 透明度调节 -->

@@ -279,9 +279,13 @@ class FloatMacroService : Service() {
         // 速度调节
         sbSpeed.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                val speedVal = progress.coerceAtLeast(1)
+                val speedVal = progress.coerceAtLeast(0)
                 activePreset.speed = speedVal
-                tvSpeedLabel.text = "压枪下滑速度: $speedVal px/步"
+                if (speedVal == 0) {
+                    tvSpeedLabel.text = "长按模式: 静止按住 (0 px/步，抖音2倍速)"
+                } else {
+                    tvSpeedLabel.text = "长按模式: 压枪下滑 ($speedVal px/步)"
+                }
             }
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
@@ -393,7 +397,11 @@ class FloatMacroService : Service() {
             panel.findViewById<Button>(R.id.btnSavePreset)?.text = "💾 保存至 ${preset.name}"
             panel.findViewById<Button>(R.id.btnClearPreset)?.text = "🗑️ 清空 ${preset.name}"
             panel.findViewById<SeekBar>(R.id.sbSpeed)?.progress = preset.speed
-            panel.findViewById<TextView>(R.id.tvSpeedLabel)?.text = "压枪下滑速度: ${preset.speed} px/步"
+            if (preset.speed == 0) {
+                panel.findViewById<TextView>(R.id.tvSpeedLabel)?.text = "长按模式: 静止按住 (0 px/步，抖音2倍速)"
+            } else {
+                panel.findViewById<TextView>(R.id.tvSpeedLabel)?.text = "长按模式: 压枪下滑 (${preset.speed} px/步)"
+            }
             val alphaPercent = (preset.alpha * 100).toInt()
             panel.findViewById<SeekBar>(R.id.sbAlpha)?.progress = alphaPercent
             panel.findViewById<TextView>(R.id.tvAlphaLabel)?.text = "按键 A 透明度: $alphaPercent%"
@@ -451,15 +459,24 @@ class FloatMacroService : Service() {
         holdDetectionJob?.cancel()
         recoilJob?.cancel()
 
-        val crosshairRadius = (crosshairParams?.width ?: 0) / 2f
-        startTargetX = activePreset.targetX + crosshairRadius
-        startTargetY = activePreset.targetY + crosshairRadius
+        val loc = IntArray(2)
+        crosshairView?.getLocationOnScreen(loc)
+        val w = crosshairView?.width ?: 0
+        val h = crosshairView?.height ?: 0
+        if (loc[0] > 0 || loc[1] > 0) {
+            startTargetX = loc[0] + w / 2f
+            startTargetY = loc[1] + h / 2f
+        } else {
+            val crosshairRadius = (crosshairParams?.width ?: 0) / 2f
+            startTargetX = activePreset.targetX + crosshairRadius
+            startTargetY = activePreset.targetY + crosshairRadius
+        }
         currentExecutionY = startTargetY
 
         hardwareTouchWatcher?.notifyButtonAPressed()
-        android.util.Log.i("FloatMacroService", "startMacroDown: 按键 A 按下，等待手势判定 ($startTargetX, $startTargetY), speed=${activePreset.speed}x${SPEED_MULTIPLIER}")
+        android.util.Log.i("FloatMacroService", "startMacroDown: 按键 A 按下，等待手势判定 (十字键中心: $startTargetX, $startTargetY), 速度=${activePreset.speed}")
 
-        // 启动长按判定倒计时（180ms 内抬起为单点，超过 180ms 确认为长按开始压枪）
+        // 启动长按判定倒计时（180ms 内抬起为单点，超过 180ms 确认为长按）
         holdDetectionJob = serviceScope.launch(Dispatchers.Main) {
             delay(HOLD_THRESHOLD_MS)
             if (isActive && isMacroRunning && !isLongPressActive) {
@@ -468,7 +485,7 @@ class FloatMacroService : Service() {
         }
     }
 
-    // 确认为长按：进入按住压枪执行循环
+    // 确认为长按：进入按住执行（静止映射或压枪）
     private fun startHoldDrag() {
         if (!isMacroRunning) return
         isLongPressActive = true
@@ -476,9 +493,9 @@ class FloatMacroService : Service() {
         triggerButton?.isFiring = true
         crosshairView?.isFiring = true
 
-        android.util.Log.i("FloatMacroService", "startHoldDrag: 【确认为长按】启动压枪下滑！起点: ($startTargetX, $startTargetY)")
+        android.util.Log.i("FloatMacroService", "startHoldDrag: 【确认为长按】长按映射到十字键！起点: ($startTargetX, $startTargetY), 速度=${activePreset.speed}")
 
-        // 1. 注入 DOWN
+        // 1. 注入 DOWN (在十字键中心按下)
         serviceScope.launch(Dispatchers.Default) {
             val ok = touchInjector.startDrag(startTargetX, startTargetY)
             if (!ok) {
@@ -489,17 +506,21 @@ class FloatMacroService : Service() {
             }
         }
 
-        // 2. 启动下滑循环
-        val step = activePreset.speed.toFloat() * SPEED_MULTIPLIER
-        val screenHeight = resources.displayMetrics.heightPixels.toFloat()
+        // 2. 只有当用户设定速度 > 0 时才执行压枪下滑；速度为 0 时为纯长按静止（完美支持抖音2倍速）
+        if (activePreset.speed > 0) {
+            val step = activePreset.speed.toFloat() * SPEED_MULTIPLIER
+            val screenHeight = resources.displayMetrics.heightPixels.toFloat()
 
-        recoilJob?.cancel()
-        recoilJob = serviceScope.launch(Dispatchers.Default) {
-            while (isActive && isLongPressActive) {
-                delay(16)
-                currentExecutionY = (currentExecutionY + step).coerceAtMost(screenHeight - 10f)
-                touchInjector.moveDrag(startTargetX, currentExecutionY)
+            recoilJob?.cancel()
+            recoilJob = serviceScope.launch(Dispatchers.Default) {
+                while (isActive && isLongPressActive) {
+                    delay(16)
+                    currentExecutionY = (currentExecutionY + step).coerceAtMost(screenHeight - 10f)
+                    touchInjector.moveDrag(startTargetX, currentExecutionY)
+                }
             }
+        } else {
+            android.util.Log.i("FloatMacroService", "startHoldDrag: 【静止长按模式】速度为0，保持原位静止按住十字键，支持抖音2倍速！")
         }
     }
 
