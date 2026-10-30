@@ -207,8 +207,6 @@ class ShizukuTouchInjector : TouchInjector {
         }
     }
 
-    // ====== 单指针原生触摸注入（按住A键，映射键精准滑动，松手即停） ======
-
     override fun tap(x: Float, y: Float): Boolean {
         val now = SystemClock.uptimeMillis()
         lastDownTime = now
@@ -216,7 +214,6 @@ class ShizukuTouchInjector : TouchInjector {
         val okDown = injectEvent(downEvent)
         downEvent.recycle()
 
-        // 维持 35ms 模拟真实点击脉冲，确保游戏物理引擎捕获开火，之后立即松手抬起
         SystemClock.sleep(35)
 
         val upTime = SystemClock.uptimeMillis()

@@ -8,7 +8,6 @@ import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
-import android.widget.Toast
 import kotlin.math.abs
 
 @SuppressLint("ViewConstructor")
@@ -47,11 +46,10 @@ class VirtualTriggerButton(
     private var isDragging: Boolean = false
     private var lastUpTime: Long = 0L
 
-    // 游戏手柄风格画笔
     private val outerBezelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeWidth = 5f
-        color = Color.parseColor("#3B82F6") // 科技蓝边框
+        color = Color.parseColor("#3B82F6")
     }
 
     private val innerBodyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -77,6 +75,15 @@ class VirtualTriggerButton(
         isClickable = true
     }
 
+    /** 外部强制复位按下状态（防止 isPressedState 卡死） */
+    fun forceRelease() {
+        if (isPressedState) {
+            isPressedState = false
+            alpha = baseAlpha
+            invalidate()
+        }
+    }
+
     fun setCustomAlpha(alphaValue: Float) {
         baseAlpha = alphaValue.coerceIn(0.1f, 1.0f)
         if (!isPressedState) {
@@ -90,30 +97,19 @@ class VirtualTriggerButton(
         val cy = height / 2f
         val radius = (width.coerceAtMost(height) / 2f) - 6f
 
-        // 1. 游戏按键渐变背景（未按下 vs 按下中 vs 移动模式）
         val gradient = if (isEditMode) {
-            RadialGradient(
-                cx, cy - radius * 0.3f, radius,
-                Color.parseColor("#F59E0B"), Color.parseColor("#B45309"),
-                Shader.TileMode.CLAMP
-            )
+            RadialGradient(cx, cy - radius * 0.3f, radius,
+                Color.parseColor("#F59E0B"), Color.parseColor("#B45309"), Shader.TileMode.CLAMP)
         } else if (isPressedState) {
-            RadialGradient(
-                cx, cy, radius,
-                Color.parseColor("#1D4ED8"), Color.parseColor("#1E40AF"),
-                Shader.TileMode.CLAMP
-            )
+            RadialGradient(cx, cy, radius,
+                Color.parseColor("#1D4ED8"), Color.parseColor("#1E40AF"), Shader.TileMode.CLAMP)
         } else {
-            RadialGradient(
-                cx, cy - radius * 0.3f, radius,
-                Color.parseColor("#3B82F6"), Color.parseColor("#1D4ED8"),
-                Shader.TileMode.CLAMP
-            )
+            RadialGradient(cx, cy - radius * 0.3f, radius,
+                Color.parseColor("#3B82F6"), Color.parseColor("#1D4ED8"), Shader.TileMode.CLAMP)
         }
         innerBodyPaint.shader = gradient
         canvas.drawCircle(cx, cy, radius, innerBodyPaint)
 
-        // 2. 外部游戏金属质感轮廓边框
         outerBezelPaint.color = if (isEditMode) {
             Color.parseColor("#FCD34D")
         } else if (isFiring) {
@@ -126,7 +122,6 @@ class VirtualTriggerButton(
         outerBezelPaint.strokeWidth = if (isPressedState || isFiring) 7f else 5f
         canvas.drawCircle(cx, cy, radius, outerBezelPaint)
 
-        // 3. 内部高光浅弧线（增加游戏手柄按键立体球形质感）
         val highlightPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
             strokeWidth = 3f
@@ -135,7 +130,6 @@ class VirtualTriggerButton(
         val arcRect = RectF(cx - radius * 0.75f, cy - radius * 0.75f, cx + radius * 0.75f, cy + radius * 0.75f)
         canvas.drawArc(arcRect, 200f, 140f, false, highlightPaint)
 
-        // 4. 游戏按键大字 "A"
         val fontMetrics = textPaint.fontMetrics
         val textY = if (isEditMode) {
             cy - (fontMetrics.top + fontMetrics.bottom) / 2f - 6f
@@ -145,7 +139,6 @@ class VirtualTriggerButton(
         textPaint.color = Color.WHITE
         canvas.drawText("A", cx, textY, textPaint)
 
-        // 编辑模式下提示“移动”，按住触发时提示“同步”
         if (isEditMode) {
             canvas.drawText("移动", cx, cy + radius * 0.65f, subTextPaint)
         } else if (isFiring) {
@@ -157,7 +150,6 @@ class VirtualTriggerButton(
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if (isEditMode) {
-            // 移动调整模式：直接全屏自由拖拽按键 A
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
                     initialX = layoutParams.x
@@ -190,11 +182,9 @@ class VirtualTriggerButton(
                 }
             }
         } else {
-            // 工作锁定模式：按住按键 A 触发滑动宏，松手立即刹车
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     val now = SystemClock.uptimeMillis()
-                    // 防重入与硬件杂波过滤：已按下或距离上次松开小于 35ms 直接忽略
                     if (isPressedState || (now - lastUpTime < 35L)) {
                         return true
                     }
@@ -204,22 +194,17 @@ class VirtualTriggerButton(
                     alpha = 1.0f
                     invalidate()
                     performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                    android.util.Log.i("VirtualTriggerButton", "onTouchEvent: Button A pressed")
+                    android.util.Log.i("VirtualTriggerButton", "Button A pressed")
                     listener.onTriggerDown()
                     return true
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    // 按住期间手指微动保持捕获，防止事件流断开
                     return true
                 }
-                MotionEvent.ACTION_CANCEL -> {
-                    // 彻底忽略系统合成的 ACTION_CANCEL（真实人手抬起只会触发 ACTION_UP）
-                    android.util.Log.d("VirtualTriggerButton", "onTouchEvent: Ignoring synthetic ACTION_CANCEL during button hold")
-                    return true
-                }
-                MotionEvent.ACTION_UP -> {
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    val tag = if (event.actionMasked == MotionEvent.ACTION_CANCEL) "CANCEL" else "UP"
                     lastUpTime = SystemClock.uptimeMillis()
-                    android.util.Log.i("VirtualTriggerButton", "onTouchEvent: Button A released ACTION_UP")
+                    android.util.Log.i("VirtualTriggerButton", "Button A released $tag")
                     isPressedState = false
                     alpha = baseAlpha
                     invalidate()

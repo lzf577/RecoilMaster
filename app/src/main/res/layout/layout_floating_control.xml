@@ -3,7 +3,7 @@
     android:layout_width="wrap_content"
     android:layout_height="wrap_content">
 
-    <!-- 贴边隐藏时的小把手 (Edge Dock Tab: 迷你纤细版) -->
+    <!-- 贴边隐藏时的小把手 -->
     <LinearLayout
         android:id="@+id/layoutEdgeDock"
         android:layout_width="18dp"
@@ -84,7 +84,7 @@
                 android:textSize="13sp" />
         </LinearLayout>
 
-        <!-- 模式切换（突出显示所见即所得） -->
+        <!-- 模式切换 -->
         <Button
             android:id="@+id/btnModeSwitch"
             android:layout_width="match_parent"

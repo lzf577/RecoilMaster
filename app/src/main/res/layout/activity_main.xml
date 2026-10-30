@@ -165,15 +165,6 @@
                 app:cornerRadius="12dp"
                 app:strokeColor="@color/accent_red" />
 
-            <Button
-                android:id="@+id/btnTestInject"
-                style="@style/Widget.Material3.Button.TextButton"
-                android:layout_width="match_parent"
-                android:layout_height="42dp"
-                android:layout_marginTop="6dp"
-                android:text="⚡ 测试模拟触控 (向下滑动测试)"
-                android:textColor="#38BDF8"
-                android:textSize="13sp" />
         </LinearLayout>
 
         <!-- 功能说明与使用指南 -->

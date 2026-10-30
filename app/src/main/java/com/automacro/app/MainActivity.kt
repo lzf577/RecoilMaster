@@ -26,7 +26,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnRequestShizuku: Button
     private lateinit var btnStartService: Button
     private lateinit var btnStopService: Button
-    private lateinit var btnTestInject: Button
 
     private val binderReceivedListener = Shizuku.OnBinderReceivedListener {
         runOnUiThread {
@@ -88,7 +87,6 @@ class MainActivity : AppCompatActivity() {
         btnRequestShizuku = findViewById(R.id.btnRequestShizuku)
         btnStartService = findViewById(R.id.btnStartService)
         btnStopService = findViewById(R.id.btnStopService)
-        btnTestInject = findViewById(R.id.btnTestInject)
     }
 
     private fun setupListeners() {
@@ -144,34 +142,6 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "悬浮宏服务已停止", Toast.LENGTH_SHORT).show()
         }
 
-        // 测试触控注入
-        btnTestInject.setOnClickListener {
-            if (!isShizukuGranted()) {
-                Toast.makeText(this, "请先启动并授权 Shizuku", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-            Thread {
-                val injector = com.automacro.app.injection.ShizukuTouchInjector()
-                val dm = resources.displayMetrics
-                val midX = dm.widthPixels / 2f
-                val startY = dm.heightPixels * 0.4f
-                val endY = dm.heightPixels * 0.6f
-
-                val okDown = injector.startDrag(midX, startY)
-                Thread.sleep(50)
-                injector.moveDrag(midX, (startY + endY) / 2f)
-                Thread.sleep(50)
-                val okUp = injector.stopDrag(midX, endY)
-
-                runOnUiThread {
-                    if (okDown && okUp) {
-                        Toast.makeText(this, "✅ 触控模拟成功！屏幕已向下滑动", Toast.LENGTH_SHORT).show()
-                    } else {
-                        Toast.makeText(this, "❌ 触控模拟失败: ${injector.lastErrorMessage}", Toast.LENGTH_LONG).show()
-                    }
-                }
-            }.start()
-        }
     }
 
     private fun updateOverlayStatus() {
