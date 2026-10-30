@@ -8,6 +8,7 @@ import android.graphics.Color
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.IBinder
+import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -555,14 +556,18 @@ class FloatMacroService : Service() {
     // ====== 宏手势核心执行逻辑（1. 单击=原点单击；2. 按住=持续向下滑动压枪；松手=立刻抬起并复位） ======
 
     private var isMacroRunning = false
+    private var isHoldingConfirmed = false
+    private var pressDownTime = 0L
     private var startTargetX = 0f
     private var startTargetY = 0f
 
-    // 1. 按下按键 A：映射目标键原位注入 DOWN。短按抬起即为单击点射；长按（超过80ms）启动持续向下滑动压枪
+    // 1. 按下按键 A：映射目标键原位注入 DOWN。短按抬起（<220ms）确认为单点，击发一下立即松手；长按（≥220ms）确认为按住，启动持续向下滑动压枪
     private fun startMacroDown() {
         if (isEditMode) return
         if (isMacroRunning) return
         isMacroRunning = true
+        isHoldingConfirmed = false
+        pressDownTime = SystemClock.uptimeMillis()
 
         macroJob?.cancel()
 
@@ -574,18 +579,20 @@ class FloatMacroService : Service() {
 
         android.util.Log.i("FloatMacroService", "startMacroDown: MappedTarget start=($startTargetX, $startTargetY), speed=${activePreset.speed}")
 
-        // 在映射目标键起始位置立即注入 DOWN（保证单击点射与全自动首发子弹零延迟开火！）
+        // 在映射目标键起始位置立即注入 DOWN（保证首发子弹零延迟即刻击发！）
         val ok = touchInjector.startDrag(startTargetX, startTargetY)
         if (!ok) {
             val err = (touchInjector as? ShizukuTouchInjector)?.lastErrorMessage?.ifEmpty { "触摸事件注入未成功" } ?: "注入异常"
             Toast.makeText(this, "宏启动提示: $err", Toast.LENGTH_SHORT).show()
         }
 
-        // 协程按住判定：
-        // - 若为【单击】（手指在 80ms 内抬起），此时不发生任何位移，stopMacroUp 会直接在原点注入 UP，完成完美的单发点射；
-        // - 若为【按住】（手指按住超过 80ms），则启动持续向下滑动压枪与持续微震动反馈！
+        // 长按判定：门限定为 220ms
+        // - 若在 220ms 内抬起：属于【单点】，stopMacroUp 立即取消协程，原位释放 UP，完成单发击发并立即松手！
+        // - 若按住超过 220ms：确认为【按住】，启动微震动，开始持续平滑向下滑动压枪！
         macroJob = serviceScope.launch(Dispatchers.Default) {
-            delay(80) // 80ms 区分单击与按住
+            delay(220) // 220ms 严谨区分单点与按住
+
+            isHoldingConfirmed = true
 
             // 确认为按住状态：启动齿轮微震动与视觉流光反馈
             startContinuousHaptic()
@@ -606,13 +613,11 @@ class FloatMacroService : Service() {
         }
     }
 
-    // 2. 放手：立即停止滑动刹车，停止震动，并在当前位置注入 UP，复位回初始原位置
+    // 2. 放手：单点则原位释放松手，按住则刹车抬起并瞬间复位
     private fun stopMacroUp() {
         if (isEditMode) return
         if (!isMacroRunning) return
         isMacroRunning = false
-
-        android.util.Log.i("FloatMacroService", "stopMacroUp: slide halted at currentExecutionY=$currentExecutionY, returning to start ($startTargetX, $startTargetY)")
 
         // 1. 立即停止协程滑动循环
         macroJob?.cancel()
@@ -625,10 +630,27 @@ class FloatMacroService : Service() {
         triggerButton?.isFiring = false
         crosshairView?.isFiring = false
 
-        // 4. 在映射目标键当前位置（单击时即为原点，长按时即为滑动终点）注入抬起事件 (ACTION_UP)，彻底终止动作
-        touchInjector.stopDrag(startTargetX, currentExecutionY)
+        val duration = SystemClock.uptimeMillis() - pressDownTime
+        if (!isHoldingConfirmed) {
+            // 【单点】：击发一下就松手！
+            android.util.Log.i("FloatMacroService", "stopMacroUp: [单点] 击发一下就松手 (duration=${duration}ms), 原位抬起UP at ($startTargetX, $startTargetY)")
+            if (duration < 35L) {
+                // 若用户点击过快(<35ms)，延迟微毫秒补足脉宽，确保游戏输入系统 100% 捕获单发射击
+                val remaining = 35L - duration
+                serviceScope.launch(Dispatchers.Default) {
+                    delay(remaining)
+                    touchInjector.stopDrag(startTargetX, startTargetY)
+                }
+            } else {
+                touchInjector.stopDrag(startTargetX, startTargetY)
+            }
+        } else {
+            // 【按住】：滑动压枪刹车
+            android.util.Log.i("FloatMacroService", "stopMacroUp: [按住] 压枪松手刹车 (duration=${duration}ms) at currentExecutionY=$currentExecutionY, 复位至 ($startTargetX, $startTargetY)")
+            touchInjector.stopDrag(startTargetX, currentExecutionY)
+        }
 
-        // 5. 【放手回到原位置】：复位触控指针为初始设定点
+        // 4. 复位触控指针为初始设定点
         currentExecutionY = startTargetY
 
         // 恢复按键原本的透明度

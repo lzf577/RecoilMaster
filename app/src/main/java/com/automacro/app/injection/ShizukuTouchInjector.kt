@@ -36,8 +36,10 @@ class ShizukuTouchInjector : TouchInjector {
         private set
 
     init {
-        initService()
-        initShellFallback()
+        val binderOk = initService()
+        if (!binderOk) {
+            initShellFallback()
+        }
     }
 
     private fun initService(): Boolean {
@@ -133,7 +135,6 @@ class ShizukuTouchInjector : TouchInjector {
             val process = constructor.newInstance(remoteProcess)
             shellWriter = BufferedWriter(OutputStreamWriter(process.outputStream))
             shellProcess = process
-            useShellFallback = true
             Log.i(TAG, "Shizuku Shell 进程兜底管道已建立！")
             true
         } catch (e: Throwable) {
@@ -208,24 +209,26 @@ class ShizukuTouchInjector : TouchInjector {
 
     // ====== 单指针原生触摸注入（按住A键，映射键精准滑动，松手即停） ======
 
+    override fun tap(x: Float, y: Float): Boolean {
+        val now = SystemClock.uptimeMillis()
+        lastDownTime = now
+        val downEvent = createSingleMotionEvent(MotionEvent.ACTION_DOWN, x, y, now)
+        val okDown = injectEvent(downEvent)
+        downEvent.recycle()
+
+        // 维持 35ms 模拟真实点击脉冲，确保游戏物理引擎捕获开火，之后立即松手抬起
+        SystemClock.sleep(35)
+
+        val upTime = SystemClock.uptimeMillis()
+        val upEvent = createSingleMotionEvent(MotionEvent.ACTION_UP, x, y, upTime)
+        val okUp = injectEvent(upEvent)
+        upEvent.recycle()
+
+        Log.i(TAG, "tap at ($x, $y) -> down:$okDown, up:$okUp")
+        return okDown && okUp
+    }
+
     private fun sendMotion(action: String, x: Float, y: Float): Boolean {
-        val ix = x.toInt()
-        val iy = y.toInt()
-
-        // 优先使用常驻高效 Shell 管道 (通过 Shizuku 的 sh 进程执行 cmd input motionevent)
-        if (initShellFallback()) {
-            try {
-                shellWriter?.write("cmd input motionevent $action $ix $iy\n")
-                shellWriter?.flush()
-                return true
-            } catch (e: Throwable) {
-                Log.e(TAG, "Shell write error: ${e.message}")
-                shellWriter = null
-                shellProcess = null
-            }
-        }
-
-        // 兜底方案：使用 Binder 反射注入
         val actionInt = when (action) {
             "DOWN" -> MotionEvent.ACTION_DOWN
             "MOVE" -> MotionEvent.ACTION_MOVE
