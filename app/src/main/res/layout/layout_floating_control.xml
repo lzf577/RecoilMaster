@@ -102,7 +102,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="预设仓位 (快速切换 1 ~ 7):"
+            android:text="预设仓位 (点击切换 1 ~ 7，长按亦可清空):"
             android:textColor="#E2E8F0"
             android:textSize="12sp" />
 
@@ -119,16 +119,33 @@
                 android:orientation="horizontal" />
         </HorizontalScrollView>
 
-        <!-- 保存当前仓位按钮 -->
-        <Button
-            android:id="@+id/btnSavePreset"
+        <!-- 仓位操作：保存 & 清空居中 -->
+        <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="36dp"
+            android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
-            android:backgroundTint="#2563EB"
-            android:text="💾 保存当前摆放与速度至仓位 1"
-            android:textColor="#FFFFFF"
-            android:textSize="11sp" />
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnSavePreset"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:backgroundTint="#2563EB"
+                android:text="💾 保存至仓位 1"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp" />
+
+            <Button
+                android:id="@+id/btnClearPreset"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:layout_marginStart="6dp"
+                android:backgroundTint="#DC2626"
+                android:text="🗑️ 清空仓位"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp" />
+        </LinearLayout>
 
         <!-- 速度调节 -->
         <LinearLayout

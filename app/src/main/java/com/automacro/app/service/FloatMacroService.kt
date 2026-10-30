@@ -213,6 +213,7 @@ class FloatMacroService : Service() {
         val btnClose = controlPanel!!.findViewById<Button>(R.id.btnClose)
         val btnModeSwitch = controlPanel!!.findViewById<Button>(R.id.btnModeSwitch)
         val btnSavePreset = controlPanel!!.findViewById<Button>(R.id.btnSavePreset)
+        val btnClearPreset = controlPanel!!.findViewById<Button>(R.id.btnClearPreset)
         val sbSpeed = controlPanel!!.findViewById<SeekBar>(R.id.sbSpeed)
         val sbAlpha = controlPanel!!.findViewById<SeekBar>(R.id.sbAlpha)
         val tvSpeedLabel = controlPanel!!.findViewById<TextView>(R.id.tvSpeedLabel)
@@ -287,6 +288,13 @@ class FloatMacroService : Service() {
             Toast.makeText(this, "已保存至 ${activePreset.name}", Toast.LENGTH_SHORT).show()
         }
 
+        btnClearPreset.setOnClickListener {
+            presetManager.resetPreset(activePreset.id)
+            applyCurrentPreset(presetManager.getPreset(activePreset.id))
+            setupSlotButtons()
+            Toast.makeText(this, "已清空 ${activePreset.name}，按键与准星已归屏幕中心", Toast.LENGTH_SHORT).show()
+        }
+
         setupSlotButtons()
         windowManager.addView(controlPanel, controlParams)
     }
@@ -333,6 +341,16 @@ class FloatMacroService : Service() {
                 if (preset.id == currentSlotId) { setBackgroundColor(Color.parseColor("#2563EB")); setTextColor(Color.WHITE) }
                 else { setBackgroundColor(Color.parseColor("#334155")); setTextColor(Color.parseColor("#94A3B8")) }
                 setOnClickListener { switchSlot(preset.id) }
+                setOnLongClickListener {
+                    // 长按清空该仓位，恢复默认值（屏幕居中）
+                    presetManager.resetPreset(preset.id)
+                    if (preset.id == activePreset.id) {
+                        applyCurrentPreset(presetManager.getPreset(preset.id))
+                    }
+                    setupSlotButtons()
+                    Toast.makeText(this@FloatMacroService, "仓位 ${preset.id} 已清空并复位居中", Toast.LENGTH_SHORT).show()
+                    true
+                }
             }
             container.addView(btn)
         }
@@ -356,7 +374,8 @@ class FloatMacroService : Service() {
         crosshairParams?.x = preset.targetX; crosshairParams?.y = preset.targetY
         crosshairView?.let { view -> crosshairParams?.let { p -> windowManager.updateViewLayout(view, p) } }
         controlPanel?.let { panel ->
-            panel.findViewById<Button>(R.id.btnSavePreset)?.text = "💾 保存当前摆放与速度至 ${preset.name}"
+            panel.findViewById<Button>(R.id.btnSavePreset)?.text = "💾 保存至 ${preset.name}"
+            panel.findViewById<Button>(R.id.btnClearPreset)?.text = "🗑️ 清空 ${preset.name}"
             panel.findViewById<SeekBar>(R.id.sbSpeed)?.progress = preset.speed
             panel.findViewById<TextView>(R.id.tvSpeedLabel)?.text = "压枪下滑速度: ${preset.speed} px/步"
             val alphaPercent = (preset.alpha * 100).toInt()

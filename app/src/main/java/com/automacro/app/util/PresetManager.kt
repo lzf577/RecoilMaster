@@ -6,7 +6,7 @@ import com.automacro.app.model.MacroPreset
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 
-class PresetManager(context: Context) {
+class PresetManager(private val context: Context) {
 
     private val prefs: SharedPreferences = context.getSharedPreferences("auto_macro_presets", Context.MODE_PRIVATE)
     private val gson = Gson()
@@ -15,6 +15,29 @@ class PresetManager(context: Context) {
         const val MAX_SLOTS = 7
         private const val KEY_PRESETS = "key_preset_list"
         private const val KEY_CURRENT_SLOT = "key_current_slot_index"
+    }
+
+    /**
+     * 创建默认仓位：按键 A 与准星物理居中于屏幕中心
+     */
+    fun createDefaultPreset(slotId: Int): MacroPreset {
+        val dm = context.resources.displayMetrics
+        val density = dm.density
+        val cx = dm.widthPixels / 2
+        val cy = dm.heightPixels / 2
+        // A键直径 60dp（半径 30dp），准星直径 44dp（半径 22dp）
+        val triggerOffset = (30 * density).toInt()
+        val crosshairOffset = (22 * density).toInt()
+        return MacroPreset(
+            id = slotId,
+            name = "仓位 $slotId",
+            triggerX = cx - triggerOffset,
+            triggerY = cy - triggerOffset,
+            targetX = cx - crosshairOffset,
+            targetY = cy - crosshairOffset,
+            speed = 5,
+            alpha = 0.65f
+        )
     }
 
     fun getAllPresets(): MutableList<MacroPreset> {
@@ -33,7 +56,7 @@ class PresetManager(context: Context) {
             } else if (list.size < MAX_SLOTS) {
                 // 补全不足 7 个的槽位
                 for (i in (list.size + 1)..MAX_SLOTS) {
-                    list.add(MacroPreset(id = i, name = "仓位 $i"))
+                    list.add(createDefaultPreset(i))
                 }
                 saveAllPresets(list)
             }
@@ -51,7 +74,7 @@ class PresetManager(context: Context) {
 
     fun getPreset(slotId: Int): MacroPreset {
         val list = getAllPresets()
-        return list.find { it.id == slotId } ?: MacroPreset(id = slotId, name = "仓位 $slotId")
+        return list.find { it.id == slotId } ?: createDefaultPreset(slotId)
     }
 
     fun savePreset(preset: MacroPreset) {
@@ -73,21 +96,19 @@ class PresetManager(context: Context) {
         prefs.edit().putInt(KEY_CURRENT_SLOT, slotId).apply()
     }
 
+    /** 清空指定仓位，恢复默认值（A键与准星物理居中于屏幕中心） */
+    fun resetPreset(slotId: Int) {
+        val list = getAllPresets()
+        val index = list.indexOfFirst { it.id == slotId }
+        val fresh = createDefaultPreset(slotId)
+        if (index != -1) list[index] = fresh else list.add(fresh)
+        saveAllPresets(list)
+    }
+
     private fun createDefaultPresets(): MutableList<MacroPreset> {
         val list = mutableListOf<MacroPreset>()
         for (i in 1..MAX_SLOTS) {
-            list.add(
-                MacroPreset(
-                    id = i,
-                    name = "仓位 $i",
-                    triggerX = 150 + (i * 20) % 200,
-                    triggerY = 800 + (i * 30) % 300,
-                    targetX = 540,
-                    targetY = 700 + (i * 20) % 200,
-                    speed = 4 + (i % 5),
-                    alpha = 0.65f
-                )
-            )
+            list.add(createDefaultPreset(i))
         }
         return list
     }
