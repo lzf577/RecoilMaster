@@ -1,0 +1,12 @@
+<resources>
+    <string name="app_name">自动宏</string>
+    <string name="start_service">开启悬浮宏服务</string>
+    <string name="stop_service">停止悬浮宏服务</string>
+    <string name="permission_overlay">悬浮窗权限</string>
+    <string name="permission_shizuku">Shizuku 权限</string>
+    <string name="shizuku_authorized">已授权 (已就绪)</string>
+    <string name="shizuku_unauthorized">未授权 (点击申请)</string>
+    <string name="shizuku_not_running">Shizuku 未运行</string>
+    <string name="overlay_granted">已授予</string>
+    <string name="overlay_not_granted">未授予 (点击设置)</string>
+</resources>

@@ -1,0 +1,204 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content">
+
+    <!-- 贴边隐藏时的小把手 (Edge Dock Tab: 迷你纤细版) -->
+    <LinearLayout
+        android:id="@+id/layoutEdgeDock"
+        android:layout_width="18dp"
+        android:layout_height="42dp"
+        android:background="@drawable/bg_edge_dock"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/tvDockIcon"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="◀"
+            android:textColor="#93C5FD"
+            android:textSize="10sp" />
+    </LinearLayout>
+
+    <!-- 展开后的完整控制面板 -->
+    <LinearLayout
+        android:id="@+id/layoutExpanded"
+        android:layout_width="320dp"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_control_panel"
+        android:orientation="vertical"
+        android:padding="12dp">
+
+        <!-- Header / 拖动栏 -->
+        <LinearLayout
+            android:id="@+id/layoutHeader"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/tvTitle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="自动宏控制台"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvStatusDot"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="6dp"
+                android:text="● Shizuku"
+                android:textColor="#10B981"
+                android:textSize="11sp" />
+
+            <!-- 贴边隐藏按钮 -->
+            <Button
+                android:id="@+id/btnDockEdge"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="34dp"
+                android:minWidth="0dp"
+                android:paddingHorizontal="6dp"
+                android:paddingVertical="0dp"
+                android:text="贴边隐藏"
+                android:textColor="#38BDF8"
+                android:textSize="11sp" />
+
+            <!-- 关闭服务按钮 -->
+            <Button
+                android:id="@+id/btnClose"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="32dp"
+                android:layout_height="34dp"
+                android:minWidth="0dp"
+                android:padding="0dp"
+                android:text="✕"
+                android:textColor="#EF4444"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <!-- 模式切换（突出显示所见即所得） -->
+        <Button
+            android:id="@+id/btnModeSwitch"
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
+            android:layout_marginTop="8dp"
+            android:backgroundTint="#F59E0B"
+            android:text="🔓 当前: 移动摆放模式 (两键随意拖动)"
+            android:textColor="#000000"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <!-- 预设仓位 -->
+        <TextView
+            android:id="@+id/tvSlotHeader"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="预设仓位 (快速切换 1 ~ 7):"
+            android:textColor="#E2E8F0"
+            android:textSize="12sp" />
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:id="@+id/layoutSlotsContainer"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal" />
+        </HorizontalScrollView>
+
+        <!-- 保存当前仓位按钮 -->
+        <Button
+            android:id="@+id/btnSavePreset"
+            android:layout_width="match_parent"
+            android:layout_height="36dp"
+            android:layout_marginTop="6dp"
+            android:backgroundTint="#2563EB"
+            android:text="💾 保存当前摆放与速度至仓位 1"
+            android:textColor="#FFFFFF"
+            android:textSize="11sp" />
+
+        <!-- 滑动方向切换按钮 (向下压枪 vs 向上) -->
+        <Button
+            android:id="@+id/btnDirectionSwitch"
+            android:layout_width="match_parent"
+            android:layout_height="36dp"
+            android:layout_marginTop="6dp"
+            android:backgroundTint="#0EA5E9"
+            android:text="⬇ 滑动方向: 向下压枪 (默认)"
+            android:textColor="#FFFFFF"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+        <!-- 速度调节 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/tvSpeedLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="向下滑动速度: 5 px/步"
+                android:textColor="#E2E8F0"
+                android:textSize="12sp" />
+
+            <SeekBar
+                android:id="@+id/sbSpeed"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:max="30"
+                android:min="1"
+                android:progress="5" />
+        </LinearLayout>
+
+        <!-- 透明度调节 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/tvAlphaLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="按键 A 透明度: 65%"
+                android:textColor="#E2E8F0"
+                android:textSize="12sp" />
+
+            <SeekBar
+                android:id="@+id/sbAlpha"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:max="100"
+                android:min="10"
+                android:progress="65" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:gravity="center"
+            android:text="💡 提示：按住顶部栏拖至屏幕左右边缘自动贴边隐藏"
+            android:textColor="#64748B"
+            android:textSize="10sp" />
+
+    </LinearLayout>
+
+</FrameLayout>
