@@ -130,18 +130,6 @@
             android:textColor="#FFFFFF"
             android:textSize="11sp" />
 
-        <!-- 滑动方向切换按钮 (向下压枪 vs 向上) -->
-        <Button
-            android:id="@+id/btnDirectionSwitch"
-            android:layout_width="match_parent"
-            android:layout_height="36dp"
-            android:layout_marginTop="6dp"
-            android:backgroundTint="#0EA5E9"
-            android:text="⬇ 滑动方向: 向下压枪 (默认)"
-            android:textColor="#FFFFFF"
-            android:textSize="11sp"
-            android:textStyle="bold" />
-
         <!-- 速度调节 -->
         <LinearLayout
             android:layout_width="match_parent"
@@ -153,7 +141,7 @@
                 android:id="@+id/tvSpeedLabel"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="向下滑动速度: 5 px/步"
+                android:text="压枪下滑速度: 5 px/步"
                 android:textColor="#E2E8F0"
                 android:textSize="12sp" />
 

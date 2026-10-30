@@ -85,8 +85,7 @@ class PresetManager(context: Context) {
                     targetX = 540,
                     targetY = 700 + (i * 20) % 200,
                     speed = 4 + (i % 5),
-                    alpha = 0.65f,
-                    isSlideUp = false
+                    alpha = 0.65f
                 )
             )
         }

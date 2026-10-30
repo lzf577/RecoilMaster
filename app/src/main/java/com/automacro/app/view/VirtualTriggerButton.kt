@@ -20,10 +20,9 @@ class VirtualTriggerButton(
 ) : View(context) {
 
     interface Listener {
-        fun onTriggerDown(fingerX: Float, fingerY: Float)
-        fun onTriggerUp(fingerX: Float, fingerY: Float)
+        fun onTriggerDown()
+        fun onTriggerUp()
         fun onPositionChanged(x: Int, y: Int)
-        fun onToggleModeRequested()
     }
 
     var isEditMode: Boolean = false
@@ -47,7 +46,6 @@ class VirtualTriggerButton(
     private var initialTouchY: Float = 0f
     private var isDragging: Boolean = false
     private var lastUpTime: Long = 0L
-    private var lastTriggerDownTime: Long = 0L
 
     // 游戏手柄风格画笔
     private val outerBezelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -206,8 +204,8 @@ class VirtualTriggerButton(
                     alpha = 1.0f
                     invalidate()
                     performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                    android.util.Log.i("VirtualTriggerButton", "onTouchEvent: Button A pressed at (${event.rawX}, ${event.rawY})")
-                    listener.onTriggerDown(event.rawX, event.rawY)
+                    android.util.Log.i("VirtualTriggerButton", "onTouchEvent: Button A pressed")
+                    listener.onTriggerDown()
                     return true
                 }
                 MotionEvent.ACTION_MOVE -> {
@@ -225,7 +223,7 @@ class VirtualTriggerButton(
                     isPressedState = false
                     alpha = baseAlpha
                     invalidate()
-                    listener.onTriggerUp(event.rawX, event.rawY)
+                    listener.onTriggerUp()
                     return true
                 }
             }

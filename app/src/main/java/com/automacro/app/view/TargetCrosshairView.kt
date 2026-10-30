@@ -35,13 +35,6 @@ class TargetCrosshairView(
             invalidate()
         }
 
-    // 滑动方向: false=持续向下滑动压枪(默认)，true=向上
-    var isSlideUp: Boolean = false
-        set(value) {
-            field = value
-            invalidate()
-        }
-
     private var initialX: Int = 0
     private var initialY: Int = 0
     private var initialTouchX: Float = 0f
@@ -140,7 +133,7 @@ class TargetCrosshairView(
         val dotRadius = if (isFiring) 6f else 4.5f
         canvas.drawCircle(cx, cy, dotRadius, centerDotPaint)
 
-        // 6. 触发执行时显示滑动方向箭头 (↑ 向上 / ↓ 向下)
+        // 6. 触发执行时显示向下压枪滑动箭头 (↓) 与文字
         if (isFiring) {
             val arrowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 style = Paint.Style.STROKE
@@ -150,28 +143,19 @@ class TargetCrosshairView(
                 strokeJoin = Paint.Join.ROUND
             }
             val arrowPath = Path().apply {
-                if (isSlideUp) {
-                    // 向上滑动箭头 ↑
-                    moveTo(cx, cy - 8f)
-                    lineTo(cx, cy - radius * 0.85f)
-                    moveTo(cx - 7f, cy - radius * 0.85f + 7f)
-                    lineTo(cx, cy - radius * 0.85f)
-                    lineTo(cx + 7f, cy - radius * 0.85f + 7f)
-                } else {
-                    // 向下滑动箭头 ↓
-                    moveTo(cx, cy + 8f)
-                    lineTo(cx, cy + radius * 0.85f)
-                    moveTo(cx - 7f, cy + radius * 0.85f - 7f)
-                    lineTo(cx, cy + radius * 0.85f)
-                    lineTo(cx + 7f, cy + radius * 0.85f - 7f)
-                }
+                // 向下滑动箭头 ↓
+                moveTo(cx, cy + 8f)
+                lineTo(cx, cy + radius * 0.85f)
+                moveTo(cx - 7f, cy + radius * 0.85f - 7f)
+                lineTo(cx, cy + radius * 0.85f)
+                lineTo(cx + 7f, cy + radius * 0.85f - 7f)
             }
             canvas.drawPath(arrowPath, arrowPaint)
 
-            // 显示动态上滑/压枪文字
+            // 显示动态压枪文字
             hintTextPaint.color = Color.parseColor("#10B981")
-            val textY = if (isSlideUp) cy + radius * 0.75f else cy - radius * 0.65f
-            canvas.drawText(if (isSlideUp) "上滑" else "压枪", cx, textY, hintTextPaint)
+            val textY = cy - radius * 0.65f
+            canvas.drawText("压枪", cx, textY, hintTextPaint)
         }
 
         // 7. 编辑模式下显示简短提示，所见即所得

@@ -291,34 +291,4 @@ class ShizukuTouchInjector : TouchInjector {
         Log.i(TAG, "stopDrag at ($x, $y) -> $ok")
         return ok
     }
-
-    // ====== 多指针代理接口（兼容保留，聚焦于映射目标键独立滑动，绝不污染按键 A） ======
-
-    override fun startDragMulti(
-        targetFixedX: Float,
-        targetFixedY: Float,
-        slideStartX: Float,
-        slideStartY: Float
-    ): Boolean {
-        // 映射目标键开启滑动
-        return startDrag(slideStartX, slideStartY)
-    }
-
-    override fun moveDragMulti(
-        targetFixedX: Float,
-        targetFixedY: Float,
-        slideCurrentX: Float,
-        slideCurrentY: Float
-    ): Boolean {
-        return moveDrag(slideCurrentX, slideCurrentY)
-    }
-
-    override fun stopDragMulti(
-        targetFixedX: Float,
-        targetFixedY: Float,
-        slideFinalX: Float,
-        slideFinalY: Float
-    ): Boolean {
-        return stopDrag(slideFinalX, slideFinalY)
-    }
 }

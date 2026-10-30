@@ -130,21 +130,17 @@ class FloatMacroService : Service() {
             windowManager,
             triggerParams!!,
             object : VirtualTriggerButton.Listener {
-                override fun onTriggerDown(fingerX: Float, fingerY: Float) {
-                    startMacroDown(fingerX, fingerY)
+                override fun onTriggerDown() {
+                    startMacroDown()
                 }
 
-                override fun onTriggerUp(fingerX: Float, fingerY: Float) {
-                    stopMacroUp(fingerX, fingerY)
+                override fun onTriggerUp() {
+                    stopMacroUp()
                 }
 
                 override fun onPositionChanged(x: Int, y: Int) {
                     activePreset.triggerX = x
                     activePreset.triggerY = y
-                }
-
-                override fun onToggleModeRequested() {
-                    toggleMode()
                 }
             }
         ).apply {
@@ -229,7 +225,6 @@ class FloatMacroService : Service() {
         val btnClose = controlPanel!!.findViewById<Button>(R.id.btnClose)
         val btnModeSwitch = controlPanel!!.findViewById<Button>(R.id.btnModeSwitch)
         val btnSavePreset = controlPanel!!.findViewById<Button>(R.id.btnSavePreset)
-        val btnDirectionSwitch = controlPanel!!.findViewById<Button>(R.id.btnDirectionSwitch)
         val sbSpeed = controlPanel!!.findViewById<SeekBar>(R.id.sbSpeed)
         val sbAlpha = controlPanel!!.findViewById<SeekBar>(R.id.sbAlpha)
         val tvSpeedLabel = controlPanel!!.findViewById<TextView>(R.id.tvSpeedLabel)
@@ -243,15 +238,6 @@ class FloatMacroService : Service() {
         } else {
             tvStatusDot.text = "● 未运行"
             tvStatusDot.setTextColor(Color.parseColor("#EF4444"))
-        }
-
-        // 切换滑动方向按钮 (向下压枪 vs 向上)
-        btnDirectionSwitch.setOnClickListener {
-            activePreset.isSlideUp = !activePreset.isSlideUp
-            updateDirectionUi()
-            presetManager.savePreset(activePreset)
-            val dirStr = if (activePreset.isSlideUp) "向上" else "向下压枪 (默认)"
-            Toast.makeText(this, "滑动方向已切换为: $dirStr", Toast.LENGTH_SHORT).show()
         }
 
         // 支持拖拽控制台顶部条：靠近边缘时自动贴边隐藏
@@ -338,8 +324,7 @@ class FloatMacroService : Service() {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 val speedVal = progress.coerceAtLeast(1)
                 activePreset.speed = speedVal
-                val dirStr = if (activePreset.isSlideUp) "向上滑动" else "向下压枪"
-                tvSpeedLabel.text = "${dirStr}速度: $speedVal px/步"
+                tvSpeedLabel.text = "压枪下滑速度: $speedVal px/步"
             }
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
@@ -480,6 +465,7 @@ class FloatMacroService : Service() {
             panel.findViewById<Button>(R.id.btnSavePreset)?.text = "💾 保存当前摆放与速度至 ${preset.name}"
             val sbSpeed = panel.findViewById<SeekBar>(R.id.sbSpeed)
             sbSpeed?.progress = preset.speed
+            panel.findViewById<TextView>(R.id.tvSpeedLabel)?.text = "压枪下滑速度: ${preset.speed} px/步"
 
             val sbAlpha = panel.findViewById<SeekBar>(R.id.sbAlpha)
             val tvAlphaLabel = panel.findViewById<TextView>(R.id.tvAlphaLabel)
@@ -487,28 +473,6 @@ class FloatMacroService : Service() {
             sbAlpha?.progress = alphaPercent
             tvAlphaLabel?.text = "按键 A 透明度: $alphaPercent%"
         }
-
-        updateDirectionUi()
-    }
-
-    // 更新方向按钮与速度标签 UI
-    @SuppressLint("SetTextI18n")
-    private fun updateDirectionUi() {
-        controlPanel?.let { panel ->
-            val btnDirectionSwitch = panel.findViewById<Button>(R.id.btnDirectionSwitch)
-            val tvSpeedLabel = panel.findViewById<TextView>(R.id.tvSpeedLabel)
-            val isUp = activePreset.isSlideUp
-            if (isUp) {
-                btnDirectionSwitch?.text = "⬆ 滑动方向: 向上"
-                btnDirectionSwitch?.setBackgroundColor(Color.parseColor("#8B5CF6"))
-                tvSpeedLabel?.text = "向上滑动速度: ${activePreset.speed} px/步"
-            } else {
-                btnDirectionSwitch?.text = "⬇ 滑动方向: 向下压枪 (默认)"
-                btnDirectionSwitch?.setBackgroundColor(Color.parseColor("#0EA5E9"))
-                tvSpeedLabel?.text = "向下压枪速度: ${activePreset.speed} px/步"
-            }
-        }
-        crosshairView?.isSlideUp = activePreset.isSlideUp
     }
 
     private fun toggleMode() {
@@ -588,14 +552,14 @@ class FloatMacroService : Service() {
         }
     }
 
-    // ====== 宏手势核心执行逻辑（A键单击=原点单击，A键按住=持续向下滑动压枪，A键松手=立刻刹车抬起并复位） ======
+    // ====== 宏手势核心执行逻辑（1. 单击=原点单击；2. 按住=持续向下滑动压枪；松手=立刻抬起并复位） ======
 
     private var isMacroRunning = false
     private var startTargetX = 0f
     private var startTargetY = 0f
 
-    // 按下按键 A：映射键在游戏内原位按下（首发即时开火），长按启动向下滑动压枪
-    private fun startMacroDown(fingerX: Float, fingerY: Float) {
+    // 1. 按下按键 A：映射目标键原位注入 DOWN。短按抬起即为单击点射；长按（超过80ms）启动持续向下滑动压枪
+    private fun startMacroDown() {
         if (isEditMode) return
         if (isMacroRunning) return
         isMacroRunning = true
@@ -608,22 +572,20 @@ class FloatMacroService : Service() {
         startTargetY = activePreset.targetY + crosshairRadius
         currentExecutionY = startTargetY
 
-        val dirName = if (activePreset.isSlideUp) "向上" else "向下压枪"
-        android.util.Log.i("FloatMacroService", "startMacroDown: Button A DOWN, MappedTarget start=($startTargetX, $startTargetY), direction=$dirName, speed=${activePreset.speed}")
+        android.util.Log.i("FloatMacroService", "startMacroDown: MappedTarget start=($startTargetX, $startTargetY), speed=${activePreset.speed}")
 
-        // 1. 在映射目标键起始位置立即注入 DOWN（保证单击点射与全自动首发子弹零延迟开火！）
+        // 在映射目标键起始位置立即注入 DOWN（保证单击点射与全自动首发子弹零延迟开火！）
         val ok = touchInjector.startDrag(startTargetX, startTargetY)
         if (!ok) {
             val err = (touchInjector as? ShizukuTouchInjector)?.lastErrorMessage?.ifEmpty { "触摸事件注入未成功" } ?: "注入异常"
             Toast.makeText(this, "宏启动提示: $err", Toast.LENGTH_SHORT).show()
         }
 
-        // 2. 协程长按判定与平滑滑动压枪循环：
-        // - 若为【单击】（手指在 80ms 内抬起），此时尚未发生任何位移，stopMacroUp 会直接在原点注入 UP，完成完美的单发点射；
+        // 协程按住判定：
+        // - 若为【单击】（手指在 80ms 内抬起），此时不发生任何位移，stopMacroUp 会直接在原点注入 UP，完成完美的单发点射；
         // - 若为【按住】（手指按住超过 80ms），则启动持续向下滑动压枪与持续微震动反馈！
         macroJob = serviceScope.launch(Dispatchers.Default) {
-            // 80ms 单击 vs 按住 门限延迟 (第一发子弹射出期间不滑动，按住后开始压枪)
-            delay(80)
+            delay(80) // 80ms 区分单击与按住
 
             // 确认为按住状态：启动齿轮微震动与视觉流光反馈
             startContinuousHaptic()
@@ -634,27 +596,23 @@ class FloatMacroService : Service() {
 
             val step = activePreset.speed.toFloat()
             val screenHeight = resources.displayMetrics.heightPixels.toFloat()
-            val isUp = activePreset.isSlideUp
 
+            // 只有持续向下滑动
             while (isActive) {
                 delay(16) // 约 60 帧每秒平滑步进
-                if (isUp) {
-                    currentExecutionY = (currentExecutionY - step).coerceAtLeast(10f)
-                } else {
-                    currentExecutionY = (currentExecutionY + step).coerceAtMost(screenHeight - 10f)
-                }
+                currentExecutionY = (currentExecutionY + step).coerceAtMost(screenHeight - 10f)
                 touchInjector.moveDrag(startTargetX, currentExecutionY)
             }
         }
     }
 
-    // 放手：立即停止滑动刹车，停止震动，并在当前位置注入 UP，复位回初始原位置
-    private fun stopMacroUp(fingerX: Float = 0f, fingerY: Float = 0f) {
+    // 2. 放手：立即停止滑动刹车，停止震动，并在当前位置注入 UP，复位回初始原位置
+    private fun stopMacroUp() {
         if (isEditMode) return
         if (!isMacroRunning) return
         isMacroRunning = false
 
-        android.util.Log.i("FloatMacroService", "stopMacroUp: Button A UP, slide halted at currentExecutionY=$currentExecutionY, returning to start ($startTargetX, $startTargetY)")
+        android.util.Log.i("FloatMacroService", "stopMacroUp: slide halted at currentExecutionY=$currentExecutionY, returning to start ($startTargetX, $startTargetY)")
 
         // 1. 立即停止协程滑动循环
         macroJob?.cancel()
