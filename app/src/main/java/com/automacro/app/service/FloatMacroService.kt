@@ -9,9 +9,6 @@ import android.graphics.PixelFormat
 import android.os.Build
 import android.os.IBinder
 import android.os.SystemClock
-import android.os.VibrationEffect
-import android.os.Vibrator
-import android.os.VibratorManager
 import android.view.*
 import android.widget.*
 import androidx.core.app.NotificationCompat
@@ -413,39 +410,6 @@ class FloatMacroService : Service() {
         crosshairView?.isEditMode = isEditMode
     }
 
-    // 触觉反馈
-    private val vibrator: Vibrator by lazy {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            (getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager).defaultVibrator
-        } else {
-            @Suppress("DEPRECATION")
-            getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
-        }
-    }
-
-    private fun startContinuousHaptic() {
-        if (!vibrator.hasVibrator()) return
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            try {
-                if (vibrator.hasAmplitudeControl()) {
-                    vibrator.vibrate(VibrationEffect.createWaveform(longArrayOf(40, 12), intArrayOf(0, 35), 0))
-                } else {
-                    vibrator.vibrate(VibrationEffect.createWaveform(longArrayOf(50, 15), 0))
-                }
-            } catch (e: Exception) {
-                @Suppress("DEPRECATION")
-                vibrator.vibrate(longArrayOf(50, 15), 0)
-            }
-        } else {
-            @Suppress("DEPRECATION")
-            vibrator.vibrate(longArrayOf(50, 15), 0)
-        }
-    }
-
-    private fun stopContinuousHaptic() {
-        try { vibrator.cancel() } catch (e: Exception) { }
-    }
-
     // ====== 宏手势核心执行逻辑 ======
 
     private var isMacroRunning = false
@@ -481,7 +445,6 @@ class FloatMacroService : Service() {
         macroJob = serviceScope.launch(Dispatchers.Default) {
             delay(HOLD_THRESHOLD_MS)
 
-            startContinuousHaptic()
             withContext(Dispatchers.Main) {
                 triggerButton?.isFiring = true
                 crosshairView?.isFiring = true
@@ -509,8 +472,6 @@ class FloatMacroService : Service() {
 
         macroJob?.cancel()
         macroJob = null
-
-        stopContinuousHaptic()
 
         triggerButton?.isFiring = false
         triggerButton?.forceRelease()
@@ -562,7 +523,6 @@ class FloatMacroService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         stopMacroUp()
-        stopContinuousHaptic()
         macroJob?.cancel()
         serviceScope.cancel()
         triggerButton?.let { windowManager.removeView(it) }

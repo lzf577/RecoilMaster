@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.*
 import android.os.SystemClock
-import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
@@ -80,6 +79,7 @@ class VirtualTriggerButton(
         if (isPressedState) {
             isPressedState = false
             alpha = baseAlpha
+            animate().scaleX(1.0f).scaleY(1.0f).setDuration(80).start()
             invalidate()
         }
     }
@@ -100,9 +100,12 @@ class VirtualTriggerButton(
         val gradient = if (isEditMode) {
             RadialGradient(cx, cy - radius * 0.3f, radius,
                 Color.parseColor("#F59E0B"), Color.parseColor("#B45309"), Shader.TileMode.CLAMP)
+        } else if (isFiring) {
+            RadialGradient(cx, cy, radius,
+                Color.parseColor("#10B981"), Color.parseColor("#047857"), Shader.TileMode.CLAMP)
         } else if (isPressedState) {
             RadialGradient(cx, cy, radius,
-                Color.parseColor("#1D4ED8"), Color.parseColor("#1E40AF"), Shader.TileMode.CLAMP)
+                Color.parseColor("#38BDF8"), Color.parseColor("#1D4ED8"), Shader.TileMode.CLAMP)
         } else {
             RadialGradient(cx, cy - radius * 0.3f, radius,
                 Color.parseColor("#3B82F6"), Color.parseColor("#1D4ED8"), Shader.TileMode.CLAMP)
@@ -110,16 +113,26 @@ class VirtualTriggerButton(
         innerBodyPaint.shader = gradient
         canvas.drawCircle(cx, cy, radius, innerBodyPaint)
 
+        // 外层能量光晕 (按下或触发时亮起扩散光环)
+        if (isPressedState || isFiring) {
+            val auraPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE
+                strokeWidth = 6f
+                color = if (isFiring) Color.argb(120, 16, 185, 129) else Color.argb(140, 56, 189, 248)
+            }
+            canvas.drawCircle(cx, cy, radius + 3f, auraPaint)
+        }
+
         outerBezelPaint.color = if (isEditMode) {
             Color.parseColor("#FCD34D")
         } else if (isFiring) {
-            Color.parseColor("#10B981")
+            Color.parseColor("#34D399")
         } else if (isPressedState) {
-            Color.parseColor("#93C5FD")
+            Color.parseColor("#E0F2FE")
         } else {
             Color.parseColor("#60A5FA")
         }
-        outerBezelPaint.strokeWidth = if (isPressedState || isFiring) 7f else 5f
+        outerBezelPaint.strokeWidth = if (isPressedState || isFiring) 8f else 5f
         canvas.drawCircle(cx, cy, radius, outerBezelPaint)
 
         val highlightPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -192,8 +205,8 @@ class VirtualTriggerButton(
                     initialTouchY = event.rawY
                     isPressedState = true
                     alpha = 1.0f
+                    animate().scaleX(0.88f).scaleY(0.88f).setDuration(40).start()
                     invalidate()
-                    performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                     android.util.Log.i("VirtualTriggerButton", "Button A pressed")
                     listener.onTriggerDown()
                     return true
@@ -207,6 +220,7 @@ class VirtualTriggerButton(
                     android.util.Log.i("VirtualTriggerButton", "Button A released $tag")
                     isPressedState = false
                     alpha = baseAlpha
+                    animate().scaleX(1.0f).scaleY(1.0f).setDuration(80).start()
                     invalidate()
                     listener.onTriggerUp()
                     return true
