@@ -35,6 +35,12 @@ class VirtualTriggerButton(
             invalidate()
         }
 
+    var isLongPressActive: Boolean = false
+        set(value) {
+            field = value
+            invalidate()
+        }
+
     // 触控与视觉状态分离：确保即使单点仅耗时数毫秒，人眼仍能清晰看到至少 140ms 的凹陷与剧烈变色
     private var isPhysicallyPressed: Boolean = false
     private var isVisuallyPressed: Boolean = false
@@ -115,6 +121,14 @@ class VirtualTriggerButton(
             isVisuallyPressed = false
             alpha = baseAlpha
             invalidate()
+        } else {
+            postDelayed({
+                if (!isPhysicallyPressed && !isLongPressActive) {
+                    isVisuallyPressed = false
+                    alpha = baseAlpha
+                    invalidate()
+                }
+            }, MIN_VISUAL_HOLD_MS - elapsed)
         }
     }
 
@@ -306,6 +320,10 @@ class VirtualTriggerButton(
                     return true
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    if (event.actionMasked == MotionEvent.ACTION_CANCEL && isLongPressActive) {
+                        android.util.Log.i("VirtualTriggerButton", "Button A 正在长按中，忽略系统 CANCEL 信号，维持长按状态")
+                        return true
+                    }
                     val tag = if (event.actionMasked == MotionEvent.ACTION_CANCEL) "CANCEL" else "UP"
                     lastUpTime = SystemClock.uptimeMillis()
                     android.util.Log.i("VirtualTriggerButton", "Button A released $tag")

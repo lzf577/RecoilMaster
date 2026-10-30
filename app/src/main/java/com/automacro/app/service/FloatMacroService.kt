@@ -14,6 +14,7 @@ import android.widget.*
 import androidx.core.app.NotificationCompat
 import com.automacro.app.MainActivity
 import com.automacro.app.R
+import com.automacro.app.injection.HardwareTouchWatcher
 import com.automacro.app.injection.ShizukuTouchInjector
 import com.automacro.app.model.MacroPreset
 import com.automacro.app.util.PresetManager
@@ -40,6 +41,10 @@ class FloatMacroService : Service() {
 
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var macroJob: Job? = null
+    private var holdDetectionJob: Job? = null
+    private var recoilJob: Job? = null
+    private var isLongPressActive: Boolean = false
+    private var hardwareTouchWatcher: HardwareTouchWatcher? = null
     private var currentExecutionY = 0f
 
     private var activePreset: MacroPreset = MacroPreset(1, "仓位 1")
@@ -84,6 +89,20 @@ class FloatMacroService : Service() {
         activePreset = presetManager.getPreset(slotId)
 
         initViews()
+
+        hardwareTouchWatcher = HardwareTouchWatcher {
+            serviceScope.launch(Dispatchers.Main) {
+                if (isLongPressActive) {
+                    android.util.Log.i("FloatMacroService", "触控抬手事件触发 -> 停止长按宏")
+                    stopHoldDrag()
+                } else if (isMacroRunning) {
+                    android.util.Log.i("FloatMacroService", "触控抬手事件触发 -> 停止单点宏")
+                    stopMacroUp()
+                }
+            }
+        }.apply {
+            start()
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -417,44 +436,66 @@ class FloatMacroService : Service() {
     private var startTargetX = 0f
     private var startTargetY = 0f
 
-    // 单点/按住 判定阈值（ms）
-    private val HOLD_THRESHOLD_MS = 220L
+    // 单点 / 长按 判定阈值（ms）
+    // 人类单击一般持续 50~120ms；超过 180ms 确认为有意长按
+    private val HOLD_THRESHOLD_MS = 180L
 
-    // 按下 A 键：立即注入 DOWN，协程等待 220ms 后确认为按住再启动滑动
+    // 按下 A 键：启动手势等待与 Slot 绑定，绝不在此刻注入 DOWN（防止 Android 跨设备 touch conflict 误判 CANCEL）
     private fun startMacroDown() {
         if (isEditMode) return
         if (isMacroRunning) return
         isMacroRunning = true
+        isLongPressActive = false
         pressDownTime = SystemClock.uptimeMillis()
 
-        macroJob?.cancel()
+        holdDetectionJob?.cancel()
+        recoilJob?.cancel()
 
         val crosshairRadius = (crosshairParams?.width ?: 0) / 2f
         startTargetX = activePreset.targetX + crosshairRadius
         startTargetY = activePreset.targetY + crosshairRadius
         currentExecutionY = startTargetY
 
-        android.util.Log.i("FloatMacroService", "startMacroDown: ($startTargetX, $startTargetY), speed=${activePreset.speed}x${SPEED_MULTIPLIER}")
+        hardwareTouchWatcher?.notifyButtonAPressed()
+        android.util.Log.i("FloatMacroService", "startMacroDown: 按键 A 按下，等待手势判定 ($startTargetX, $startTargetY), speed=${activePreset.speed}x${SPEED_MULTIPLIER}")
 
-        val ok = touchInjector.startDrag(startTargetX, startTargetY)
-        if (!ok) {
-            val err = touchInjector.lastErrorMessage.ifEmpty { "触摸事件注入未成功" }
-            Toast.makeText(this, "宏启动提示: $err", Toast.LENGTH_SHORT).show()
+        // 启动长按判定倒计时（180ms 内抬起为单点，超过 180ms 确认为长按开始压枪）
+        holdDetectionJob = serviceScope.launch(Dispatchers.Main) {
+            delay(HOLD_THRESHOLD_MS)
+            if (isActive && isMacroRunning && !isLongPressActive) {
+                startHoldDrag()
+            }
+        }
+    }
+
+    // 确认为长按：进入按住压枪执行循环
+    private fun startHoldDrag() {
+        if (!isMacroRunning) return
+        isLongPressActive = true
+        triggerButton?.isLongPressActive = true
+        triggerButton?.isFiring = true
+        crosshairView?.isFiring = true
+
+        android.util.Log.i("FloatMacroService", "startHoldDrag: 【确认为长按】启动压枪下滑！起点: ($startTargetX, $startTargetY)")
+
+        // 1. 注入 DOWN
+        serviceScope.launch(Dispatchers.Default) {
+            val ok = touchInjector.startDrag(startTargetX, startTargetY)
+            if (!ok) {
+                withContext(Dispatchers.Main) {
+                    val err = touchInjector.lastErrorMessage.ifEmpty { "触摸事件注入未成功" }
+                    Toast.makeText(this@FloatMacroService, "宏启动提示: $err", Toast.LENGTH_SHORT).show()
+                }
+            }
         }
 
-        macroJob = serviceScope.launch(Dispatchers.Default) {
-            delay(HOLD_THRESHOLD_MS)
+        // 2. 启动下滑循环
+        val step = activePreset.speed.toFloat() * SPEED_MULTIPLIER
+        val screenHeight = resources.displayMetrics.heightPixels.toFloat()
 
-            withContext(Dispatchers.Main) {
-                triggerButton?.isFiring = true
-                crosshairView?.isFiring = true
-            }
-
-            // 实际步进 = 用户设定速度 × 0.5（降幅 50%）
-            val step = activePreset.speed.toFloat() * SPEED_MULTIPLIER
-            val screenHeight = resources.displayMetrics.heightPixels.toFloat()
-
-            while (isActive) {
+        recoilJob?.cancel()
+        recoilJob = serviceScope.launch(Dispatchers.Default) {
+            while (isActive && isLongPressActive) {
                 delay(16)
                 currentExecutionY = (currentExecutionY + step).coerceAtMost(screenHeight - 10f)
                 touchInjector.moveDrag(startTargetX, currentExecutionY)
@@ -462,35 +503,60 @@ class FloatMacroService : Service() {
         }
     }
 
-    // 松手：用真实时间差判断单点 vs 按住，避免竞态条件
+    // 松手：如果未达到长按阈值，则判定为单点，执行单点脉冲；如果已经在长按，则调用 stopHoldDrag
     private fun stopMacroUp() {
         if (isEditMode) return
         if (!isMacroRunning) return
-        isMacroRunning = false
 
         val duration = SystemClock.uptimeMillis() - pressDownTime
+        holdDetectionJob?.cancel()
+        holdDetectionJob = null
 
-        macroJob?.cancel()
-        macroJob = null
+        if (isLongPressActive) {
+            stopHoldDrag()
+            return
+        }
 
+        // 判定为单点模式
+        isMacroRunning = false
         triggerButton?.isFiring = false
         triggerButton?.forceRelease()
         crosshairView?.isFiring = false
 
-        if (duration < HOLD_THRESHOLD_MS) {
-            android.util.Log.i("FloatMacroService", "stopMacroUp: [单点] ${duration}ms, UP at ($startTargetX, $startTargetY)")
-            if (duration < 35L) {
-                val remaining = 35L - duration
-                serviceScope.launch(Dispatchers.Default) {
-                    delay(remaining)
-                    touchInjector.stopDrag(startTargetX, startTargetY)
-                }
-            } else {
-                touchInjector.stopDrag(startTargetX, startTargetY)
-            }
-        } else {
-            android.util.Log.i("FloatMacroService", "stopMacroUp: [按住] ${duration}ms, UP at ($startTargetX, $currentExecutionY)")
-            touchInjector.stopDrag(startTargetX, currentExecutionY)
+        android.util.Log.i("FloatMacroService", "stopMacroUp: 【单点模式】按压耗时 ${duration}ms，执行目标点单击 ($startTargetX, $startTargetY)")
+
+        // 异步注入单击脉冲（DOWN + 35ms + UP）
+        serviceScope.launch(Dispatchers.Default) {
+            touchInjector.tap(startTargetX, startTargetY)
+        }
+
+        currentExecutionY = startTargetY
+        triggerButton?.setCustomAlpha(activePreset.alpha)
+    }
+
+    // 停止长按压枪：由硬件监听器或按键 UP 触发
+    private fun stopHoldDrag() {
+        if (!isMacroRunning && !isLongPressActive) return
+
+        val duration = SystemClock.uptimeMillis() - pressDownTime
+        isMacroRunning = false
+        isLongPressActive = false
+
+        holdDetectionJob?.cancel()
+        holdDetectionJob = null
+        recoilJob?.cancel()
+        recoilJob = null
+
+        triggerButton?.isLongPressActive = false
+        triggerButton?.isFiring = false
+        triggerButton?.forceRelease()
+        crosshairView?.isFiring = false
+
+        android.util.Log.i("FloatMacroService", "stopHoldDrag: 【长按结束】总耗时 ${duration}ms，释放 UP 于 ($startTargetX, $currentExecutionY)")
+
+        val finalY = currentExecutionY
+        serviceScope.launch(Dispatchers.Default) {
+            touchInjector.stopDrag(startTargetX, finalY)
         }
 
         currentExecutionY = startTargetY
@@ -522,7 +588,12 @@ class FloatMacroService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        stopHoldDrag()
         stopMacroUp()
+        hardwareTouchWatcher?.stop()
+        hardwareTouchWatcher = null
+        holdDetectionJob?.cancel()
+        recoilJob?.cancel()
         macroJob?.cancel()
         serviceScope.cancel()
         triggerButton?.let { windowManager.removeView(it) }
